@@ -1,0 +1,34 @@
+# EXAMPLE ONLY. Test this policy against your actual image and release identity first.
+# It starts in Audit mode intentionally; do not enforce until verification succeeds.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: secureship-verify-image-signatures-example
+  annotations:
+    policies.kyverno.io/title: Verify SecureShip image signature (example)
+    policies.kyverno.io/category: Supply Chain Security
+spec:
+  validationFailureAction: Audit
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-secureship-demo-image
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [secureship]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/sujju-12/secureship-devsecops-platform*"
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    issuer: "https://token.actions.githubusercontent.com"
+                    subject: "https://github.com/Sujju-12/secureship-devsecops-platform/.github/workflows/release.yml@refs/heads/main"
+                    rekor:
+                      url: "https://rekor.sigstore.dev"

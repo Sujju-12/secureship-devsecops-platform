@@ -1,0 +1,7 @@
+# Findings at HIGH/CRITICAL severity fail the default CI scan.
+severity:
+  - HIGH
+  - CRITICAL
+ignore-unfixed: true
+exit-code: 1
+format: table

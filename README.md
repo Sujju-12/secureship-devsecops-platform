@@ -1,72 +1,81 @@
 # SecureShip — DevSecOps & Software Supply Chain Security
 
-SecureShip is a local-first portfolio lab that demonstrates how to add security controls across a software delivery pipeline.
+SecureShip is a local-first portfolio lab showing how to add security controls across the software delivery lifecycle.
 
-## What it demonstrates
+## Included controls
 
-- Python Flask API with unit tests and a non-root container
-- GitHub Actions CI: tests, Gitleaks secret scan, Trivy filesystem and image scans
-- Terraform static validation and Checkov IaC scanning
-- Syft SBOM generation (CycloneDX JSON)
-- Cosign keyless image signing and verification for published images
-- Kubernetes deployment baseline and Kyverno admission policies for security controls
-- Documentation for threat model, local lab, release flow and interview walkthrough
+- Python Flask demo API with tests and a non-root Docker image
+- GitHub Actions CI for tests, lint, Gitleaks secret detection, Trivy filesystem/container scans
+- Terraform formatting/validation and Checkov IaC scanning
+- Syft-generated CycloneDX SBOM artifacts
+- Release workflow that publishes an immutable SHA-tagged image to GHCR and signs its digest with Cosign keyless OIDC
+- Kubernetes restricted namespace, hardened workload manifest and Kyverno policy examples
+- Threat model, local lab guide and interview walkthrough
 
-> This is a learning/reference project. Security gates and policies must be tested in your environment before being treated as production controls. CI checks may fail when scanners identify vulnerabilities; review reports rather than blindly suppressing findings.
+> Learning/reference project. Workflow configuration is not proof that every check has passed. Review scan findings and validate the admission policies in a disposable cluster before using them in a shared environment.
 
 ## Quick start
 
-Requirements: Docker, Python 3.11+, Git, and optionally Kind, kubectl, Helm, Terraform, Trivy, Syft, Cosign and Kyverno.
+Requirements: Python 3.12+; Docker is optional for API tests.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r app/requirements-dev.txt
 pytest -q
+ruff check app
 python app/app.py
 ```
 
 Open `http://127.0.0.1:8080/healthz`.
 
-Build and scan the container:
+## Build and inspect the image
 
 ```bash
-docker build -t secureship-demo:local -f app/Dockerfile .
-trivy image --severity HIGH,CRITICAL secureship-demo:local
+docker build --pull -f app/Dockerfile -t secureship-demo:local .
+trivy image --severity HIGH,CRITICAL --ignore-unfixed secureship-demo:local
 syft secureship-demo:local -o cyclonedx-json=sbom.cdx.json
 ```
 
-See [docs/LOCAL-LAB.md](docs/LOCAL-LAB.md) for the full workflow and [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md) for security boundaries.
-
-## Pipeline flow
+## Pipeline
 
 ```text
 Pull request / push
-  -> tests + lint
-  -> secret scan + dependency/filesystem scan
-  -> Terraform validation + Checkov
-  -> container build + Trivy scan
-  -> SBOM generation + artifact upload
-  -> main branch: publish immutable image tag
-  -> keyless sign image (OIDC identity)
-  -> Kubernetes admission policy verifies image policy
+  -> unit tests + lint
+  -> Gitleaks secret scan
+  -> Trivy filesystem/dependency/config scan
+  -> Terraform validate + Checkov
+  -> container build + Trivy image scan
+  -> CycloneDX SBOM artifact
+main branch release
+  -> build and publish immutable SHA tag to GHCR
+  -> Cosign keyless signature using GitHub OIDC
+  -> release SBOM artifact
+Kubernetes lab
+  -> Kyverno policies for image tags and non-root execution
+  -> optional example for signature verification (starts in Audit)
 ```
 
-The default workflow does not require AWS or a continuously running cluster. Registry publishing and cluster deployment are optional, explicitly configured extensions.
+The default workflow does not provision AWS or require a permanently running Kubernetes cluster. Terraform is a validation exercise and creates no resources.
 
-## Repository layout
+## Repository map
 
-- `app/` — Flask sample API, tests, requirements and Dockerfile
-- `.github/workflows/` — CI and release workflow
-- `terraform/` — minimal safe example and validation
+- `app/` — demo API, tests, dependencies and Dockerfile
+- `.github/workflows/ci.yml` — pull request/push checks
+- `.github/workflows/release.yml` — GHCR publication and image signing
+- `terraform/` — optional Terraform validation and Checkov scan
 - `k8s/` — namespace, deployment and Kyverno policies
-- `scripts/` — local security checks and lab helpers
-- `docs/` — architecture, local lab, threat model and interview notes
+- `scripts/local-check.sh` — local test/lint/scan helper
+- `docs/` — architecture, threat model, local lab and interview notes
+- `SECURITY.md` — project safety policy
 
-## Safety principles
+## Important security principles
 
-- Never commit real credentials. Use Gitleaks to detect accidental exposure; rotate any credential that was exposed.
-- Use least privilege and short-lived identities for CI where supported.
-- Do not deploy mutable `latest` tags in production; prefer immutable digests.
-- Treat scanner output as evidence to review, not proof of security.
-- Keep remediation human-approved until controls are proven safe.
+- Never commit real credentials; scanning does not revoke exposed secrets.
+- Prefer immutable image digests and verify the expected signer identity.
+- An SBOM is an inventory, not a guarantee that an image is safe.
+- A signed image can still contain vulnerabilities.
+- Test admission policies against the exact Kyverno version before enforcement.
+- Review third-party GitHub Actions and pin them to full commit SHAs before treating the pipeline as production hardened.
+
+See [Architecture](docs/ARCHITECTURE.md), [Security Model](docs/SECURITY-MODEL.md), [Local Lab](docs/LOCAL-LAB.md), and [Interview Guide](docs/INTERVIEW-GUIDE.md).

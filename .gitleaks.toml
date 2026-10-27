@@ -1,0 +1,7 @@
+title = "SecureShip Gitleaks configuration"
+
+[allowlist]
+description = "Keep allowlists narrow; never allowlist real credentials."
+paths = [
+  '''(^|/)tests?/fixtures/.*\.example$''',
+]
